@@ -2,21 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- 拡大禁止のメタタグ（初期・最大スケール固定） -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="CLOCK">
   <title>CLOCK</title>
   
-  <!-- PWAマニフェスト（アイコン: IMG_1531.WEBP） -->
   <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22CLOCK%22%2C%22short_name%22%3A%22CLOCK%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22IMG_1531.WEBP%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fwebp%22%7D%5D%7D">
   <link rel="apple-touch-icon" href="IMG_1531.WEBP">
 
   <style>
     * {
       box-sizing: border-box;
+      /* 選択、ハイライトの禁止 */
       user-select: none;
       -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
     body, html {
       margin: 0;
@@ -24,20 +26,23 @@
       width: 100%;
       height: 100%;
       background-color: #000000;
+      /* 拡大・スクロール・バウンスの完全禁止（CSSレベル） */
       overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+      
       display: flex;
       justify-content: center;
       align-items: center;
-      /* 背景色の変化を1.5秒かけて極めて滑らかに */
+      /* 背景色の滑らかな変化（1.5秒クロスフェード） */
       transition: background-color 1.5s cubic-bezier(0.25, 1, 0.5, 1); 
     }
 
-    /* ホワイトアウト時のスタイル */
     body.flash-active {
       background-color: #ffffff !important;
     }
 
-    /* アナログ時計コンテナ（1.5秒のスムーズフェード） */
+    /* アナログ時計コンテナ */
     #clock-container {
       width: 90vmin;
       height: 90vmin;
@@ -47,7 +52,7 @@
       opacity: 1;
     }
 
-    /* 文字盤 */
+    /* 文字盤と目盛り */
     .clock-face {
       width: 100%;
       height: 100%;
@@ -55,8 +60,6 @@
       border-radius: 50%;
       position: relative;
     }
-
-    /* 目盛り */
     .tick {
       position: absolute;
       width: 2px;
@@ -88,7 +91,7 @@
       border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
     }
 
-    /* デジタル時計（1.5秒のスムーズフェード） */
+    /* デジタル時計 */
     #digital-clock {
       position: absolute;
       font-size: 24vw;
@@ -106,7 +109,6 @@
 </head>
 <body>
 
-  <!-- アナログ時計 -->
   <div id="clock-container">
     <div class="clock-face" id="clock-face">
       <div class="hand hour-hand" id="hour-hand"></div>
@@ -115,10 +117,20 @@
     </div>
   </div>
 
-  <!-- デジタル時計 -->
   <div id="digital-clock">00:00</div>
 
   <script>
+    // ==========================================
+    // 拡大・スクロールの完全禁止（JavaScriptレベル）
+    // ==========================================
+    document.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+    }, { passive: false });
+
+
+    // ==========================================
+    // 時計ロジック
+    // ==========================================
     const bodyEl = document.body;
     const clockContainer = document.getElementById('clock-container');
     const hourHand = document.getElementById('hour-hand');
@@ -126,7 +138,7 @@
     const clockFace = document.getElementById('clock-face');
     const digitalClock = document.getElementById('digital-clock');
 
-    // 文字盤の目盛り（12個）を生成
+    // 目盛り生成
     for (let i = 0; i < 12; i++) {
       const tick = document.createElement('div');
       tick.classList.add('tick');
@@ -137,84 +149,116 @@
 
     let isAnimationRunning = false;
 
-    function updateClock() {
-      // 常に日本時間（Asia/Tokyo）を取得
+    function getJSTParts() {
       const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
       const formatter = new Intl.DateTimeFormat('ja-JP', options);
       const parts = formatter.formatToParts(new Date());
+      return {
+        hours: parseInt(parts.find(p => p.type === 'hour').value, 10),
+        minutes: parseInt(parts.find(p => p.type === 'minute').value, 10),
+        seconds: parseInt(parts.find(p => p.type === 'second').value, 10)
+      };
+    }
 
-      const hours = parseInt(parts.find(p => p.type === 'hour').value, 10);
-      const minutes = parseInt(parts.find(p => p.type === 'minute').value, 10);
-      const seconds = parseInt(parts.find(p => p.type === 'second').value, 10);
+    function updateClock() {
+      const { hours, minutes, seconds } = getJSTParts();
 
-      // 通常時のアナログ針の駆動
       if (!isAnimationRunning) {
         const minuteDeg = minutes * 6;
         const hourDeg = (hours % 12) * 30 + minutes * 0.5;
         hourHand.style.transform = `rotate(${hourDeg}deg)`;
         minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
-        // ピクセルシフト（焼き付き防止：1分毎に最大3pxランダム移動）
+        // ピクセルシフト（焼き付き防止）
         const randomX = Math.floor(Math.random() * 7) - 3;
         const randomY = Math.floor(Math.random() * 7) - 3;
         clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
       }
 
-      // 【修正済】毎時0分00秒の演出トリガー判定
+      // 毎時0分00秒の自動発動
       if (minutes === 0 && seconds === 0 && !isAnimationRunning) {
-        triggerHourlyAnimation(hours);
+        playAnimation(hours, minutes);
       }
     }
 
-    // 正確に動作するクロスフェード演出アニメーション
-    function triggerHourlyAnimation(currentHour) {
+    // クロスフェード演出の本体
+    function playAnimation(targetHour, targetMinute) {
+      if (isAnimationRunning) return;
       isAnimationRunning = true;
 
-      // デジタル時計のテキストを事前に更新
-      const displayHour = String(currentHour).padStart(2, '0');
-      digitalClock.textContent = `${displayHour}:00`;
+      // デジタル時計にセットする時刻（自動0分でも、手動の現在時刻でも対応）
+      const displayHour = String(targetHour).padStart(2, '0');
+      const displayMinute = String(targetMinute).padStart(2, '0');
+      digitalClock.textContent = `${displayHour}:${displayMinute}`;
 
-      // STEP 1: アナログ時計を滑らかにフェードアウトしつつ、背景を白くし、デジタルを表示
-      // 全て同じ1.5秒のトランジションでシンクロさせます
+      // STEP 1: アナログ消去、背景白、デジタル表示（1.5秒）
       clockContainer.style.opacity = '0';
       bodyEl.classList.add('flash-active');
       digitalClock.style.opacity = '1';
 
-      // STEP 2: ホワイトアウト＆デジタル表示の状態を【4秒間】キープ
+      // STEP 2: ホワイトアウト状態をキープ（4秒間）
       setTimeout(() => {
-        
-        // STEP 3: 【完全クロスフェード】背景を黒に戻しつつ、デジタルを消し、アナログを同時にフェードイン
+        // STEP 3: 全てを元に戻すクロスフェード（1.5秒）
         bodyEl.classList.remove('flash-active');
         digitalClock.style.opacity = '0';
         clockContainer.style.opacity = '1';
 
-        // STEP 4: 1.5秒のアニメーションが完全に終了したら、システムを通常駆動に戻す
+        // STEP 4: 終了後に状態リセット
         setTimeout(() => {
           isAnimationRunning = false;
-          updateClock(); // 演出終了時点の正確な時間で針の位置を同期
+          updateClock(); // 針の位置を同期
         }, 1500);
 
       }, 4000);
     }
 
-    // 1秒ごとに時間を正確に監視
+    // メインループ
     updateClock();
     setInterval(updateClock, 1000);
 
-    // 画面常時点灯（Wake Lock API）
+
+    // ==========================================
+    // 5回連続タップの検知（隠し機能）＆ Wake Lock
+    // ==========================================
+    let tapCount = 0;
+    let tapTimeout = null;
     let wakeLock = null;
+
     async function requestWakeLock() {
       try {
         if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
       } catch (err) {}
     }
-    document.addEventListener('click', requestWakeLock);
+
+    document.addEventListener('click', () => {
+      // タップで画面常時点灯をリクエスト
+      requestWakeLock();
+
+      // 5回タップのカウント処理
+      tapCount++;
+      clearTimeout(tapTimeout);
+
+      if (tapCount >= 5) {
+        tapCount = 0; // リセット
+        const { hours, minutes } = getJSTParts(); // その瞬間の時間を取得
+        playAnimation(hours, minutes); // 演出トリガー
+      } else {
+        // 1秒間タップされなかったらカウントをリセット
+        tapTimeout = setTimeout(() => {
+          tapCount = 0;
+        }, 1000);
+      }
+    });
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') requestWakeLock();
     });
 
-    // PWA用のインライン・サービスワーカー（オフライン対応 ＆ キャッシュ自動更新）
-    const CACHE_NAME = 'clock-v4-fixed';
+
+    // ==========================================
+    // サービスワーカー（オフライン動作 ＆ キャッシュ自動更新）
+    // ==========================================
+    const CACHE_NAME = 'clock-v5-pro';
     const ASSETS = ['./', './index.html', './IMG_1531.WEBP'];
 
     if ('serviceWorker' in navigator) {
@@ -237,6 +281,7 @@
         self.addEventListener('fetch', (e) => {
           e.respondWith(
             caches.match(e.request).then((cachedResponse) => {
+              // ネットワークから最新を取得してキャッシュを書き換える
               const fetchPromise = fetch(e.request).then((networkResponse) => {
                 if (networkResponse && networkResponse.status === 200) {
                   const cacheCopy = networkResponse.clone();
@@ -244,6 +289,8 @@
                 }
                 return networkResponse;
               }).catch(() => null);
+              
+              // キャッシュがあれば即座に返し、なければネットワーク待機
               return cachedResponse || fetchPromise;
             })
           );
