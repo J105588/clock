@@ -213,10 +213,6 @@
         hourHand.style.transform = `rotate(${hourDeg}deg)`;
         minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
-        // ピクセルシフト（焼き付き防止）
-        const randomX = Math.floor(Math.random() * 7) - 3;
-        const randomY = Math.floor(Math.random() * 7) - 3;
-        clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
       }
 
       // 毎時0分00秒の自動発動
@@ -302,46 +298,36 @@
     // ==========================================
     // サービスワーカー（オフライン動作 ＆ キャッシュ自動更新）
     // ==========================================
-    const CACHE_NAME = 'clock-v6-pro';
-    const ASSETS = ['./', './index.html', './icon.png'];
-
     if ('serviceWorker' in navigator) {
-      const swCode = `
-        const CACHE_NAME = '${CACHE_NAME}';
-        const ASSETS = ${JSON.stringify(ASSETS)};
+      // 既存の古い Blob URL サービスワーカーがあれば登録解除してクリーンアップする
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          const scriptURL = registration.active?.scriptURL || 
+                            registration.installing?.scriptURL || 
+                            registration.waiting?.scriptURL;
+          if (scriptURL && scriptURL.startsWith('blob:')) {
+            registration.unregister();
+          }
+        }
+      });
 
-        self.addEventListener('install', (e) => {
-          e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
-          self.skipWaiting();
-        });
+      // sw.js を登録 (ブラウザのHTTPキャッシュを無視して常に最新をチェック)
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+        // ページ読み込み時に即座にアップデートの有無を確認
+        reg.update();
+      });
 
-        self.addEventListener('activate', (e) => {
-          e.waitUntil(caches.keys().then((keys) => Promise.all(
-            keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); })
-          )));
-          self.clients.claim();
-        });
-
-        self.addEventListener('fetch', (e) => {
-          e.respondWith(
-            caches.match(e.request).then((cachedResponse) => {
-              // ネットワークから最新を取得してキャッシュを書き換える
-              const fetchPromise = fetch(e.request).then((networkResponse) => {
-                if (networkResponse && networkResponse.status === 200) {
-                  const cacheCopy = networkResponse.clone();
-                  caches.open(CACHE_NAME).then((cache) => cache.put(e.request, cacheCopy));
-                }
-                return networkResponse;
-              }).catch(() => null);
-              
-              // キャッシュがあれば即座に返し、なければネットワーク待機
-              return cachedResponse || fetchPromise;
-            })
-          );
-        });
-      `;
-      const blob = new Blob([swCode], { type: 'application/javascript' });
-      navigator.serviceWorker.register(URL.createObjectURL(blob), { scope: './' }).then((reg) => { reg.update(); });
+      // 新しいサービスワーカーがアクティベートされて制御を開始したらページを自動リロード
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          // すでに以前のコントローラー（古いサービスワーカー）が存在していた場合のみリロードを実行
+          if (navigator.serviceWorker.controller) {
+            window.location.reload();
+          }
+        }
+      });
     }
   </script>
 </body>
