@@ -8,10 +8,8 @@
   <meta name="apple-mobile-web-app-title" content="CLOCK">
   <title>CLOCK</title>
   
-  <!-- PWAマニフェスト（アイコンに IMG_1531.WEBP を指定） -->
+  <!-- PWAマニフェスト（アイコン: IMG_1531.WEBP） -->
   <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22CLOCK%22%2C%22short_name%22%3A%22CLOCK%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22IMG_1531.WEBP%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fwebp%22%7D%5D%7D">
-
-  <!-- iOS用アイコン -->
   <link rel="apple-touch-icon" href="IMG_1531.WEBP">
 
   <style>
@@ -30,18 +28,25 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      transition: background-color 0.4s ease; /* 画面全体が白くなる演出用 */
     }
 
-    /* 焼き付き防止コンテナ */
+    /* 毎時0分のホワイトアウト演出用のクラス */
+    body.flash-active {
+      background-color: #ffffff !important;
+    }
+
+    /* アナログ時計のコンテナ（ピクセルシフト・フェードアウト用） */
     #clock-container {
       width: 90vmin;
       height: 90vmin;
-      position: relative;
-      transition: transform 0.5s ease;
-      will-change: transform;
+      position: absolute;
+      transition: transform 0.5s ease, opacity 0.4s ease;
+      will-change: transform, opacity;
+      opacity: 1;
     }
 
-    /* 文字盤 */
+    /* 時計の文字盤 */
     .clock-face {
       width: 100%;
       height: 100%;
@@ -76,37 +81,36 @@
       transition: transform 0.6s cubic-bezier(0.4, 2.08, 0.55, 1);
     }
 
-    /* 時針 */
-    .hour-hand {
-      width: 8px;
-      height: 25%;
-      background-color: #aaaaaa;
-      margin-left: -4px;
-    }
-
-    /* 分針 */
-    .minute-hand {
-      width: 4px;
-      height: 40%;
-      background-color: #e0e0e0;
-      margin-left: -2px;
-    }
-
-    /* センターピン */
+    /* 時針・分針 */
+    .hour-hand { width: 8px; height: 25%; background-color: #aaaaaa; margin-left: -4px; }
+    .minute-hand { width: 4px; height: 40%; background-color: #e0e0e0; margin-left: -2px; }
     .center-dot {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      background-color: #e0e0e0;
-      border-radius: 50%;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      position: absolute; width: 12px; height: 12px; background-color: #e0e0e0;
+      border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
     }
+
+    /* 演出時のみ裏で浮かび上がるデジタル時計（初期状態は完全に透明） */
+    #digital-clock {
+      position: absolute;
+      font-size: 24vw;
+      font-weight: 300;
+      color: #000000; /* 白画面の時は黒文字 */
+      opacity: 0;
+      transition: opacity 0.4s ease, color 0.4s ease;
+      will-change: opacity, color;
+      pointer-events: none;
+    }
+    @media (orientation: landscape) {
+      #digital-clock { font-size: 22vh; }
+    }
+
+    /* 白画面が終わり、背景が黒に戻っていくときのデジタル文字の色（白文字化） */
+    #digital-clock.dark-text-mode { color: #ffffff; }
   </style>
 </head>
 <body>
 
+  <!-- アナログ時計 -->
   <div id="clock-container">
     <div class="clock-face" id="clock-face">
       <div class="hand hour-hand" id="hour-hand"></div>
@@ -115,15 +119,18 @@
     </div>
   </div>
 
+  <!-- デジタル時計（通常時は非表示） -->
+  <div id="digital-clock">00:00</div>
+
   <script>
-    // ==========================================
-    // 1. 時計のロジック（日本時間・省エネ）
-    // ==========================================
+    const bodyEl = document.body;
     const clockContainer = document.getElementById('clock-container');
     const hourHand = document.getElementById('hour-hand');
     const minuteHand = document.getElementById('minute-hand');
     const clockFace = document.getElementById('clock-face');
+    const digitalClock = document.getElementById('digital-clock');
 
+    // 目盛り生成
     for (let i = 0; i < 12; i++) {
       const tick = document.createElement('div');
       tick.classList.add('tick');
@@ -132,30 +139,81 @@
       clockFace.appendChild(tick);
     }
 
+    let isAnimationRunning = false;
+
     function updateClock() {
-      const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', hour12: false };
+      // 日本時間（JST）の取得
+      const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
       const formatter = new Intl.DateTimeFormat('ja-JP', options);
       const parts = formatter.formatToParts(new Date());
 
       const hours = parseInt(parts.find(p => p.type === 'hour').value, 10);
       const minutes = parseInt(parts.find(p => p.type === 'minute').value, 10);
+      const seconds = parseInt(parts.find(p => p.type === 'second').value, 10);
 
-      const minuteDeg = minutes * 6;
-      const hourDeg = (hours % 12) * 30 + minutes * 0.5;
+      // 通常時のアナログ針の更新（演出実行中でない場合のみ）
+      if (!isAnimationRunning) {
+        const minuteDeg = minutes * 6;
+        const hourDeg = (hours % 12) * 30 + minutes * 0.5;
+        hourHand.style.transform = `rotate(${hourDeg}deg)`;
+        minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
-      hourHand.style.transform = `rotate(${hourDeg}deg)`;
-      minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
+        // ピクセルシフト（焼き付き防止）
+        const randomX = Math.floor(Math.random() * 7) - 3;
+        const randomY = Math.floor(Math.random() * 7) - 3;
+        clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
+      }
 
-      // ピクセルシフト（焼き付き防止）
-      const randomX = Math.floor(Math.random() * 7) - 3;
-      const randomY = Math.floor(Math.random() * 7) - 3;
-      clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
+      // 【毎時0分00秒の演出ロジック】
+      if (minutes === 0 && seconds === 0 && !isAnimationRunning) {
+        triggerHourlyAnimation(hours);
+      }
     }
 
-    updateClock();
-    setInterval(updateClock, 10000); // 10秒に1回チェック（省エネ）
+    function triggerHourlyAnimation(currentHour) {
+      isAnimationRunning = true;
 
-    // 常時点灯リクエスト
+      // デジタル時計のテキストをセット（例: "12:00"）
+      const displayHour = String(currentHour).padStart(2, '0');
+      digitalClock.textContent = `${displayHour}:00`;
+
+      // 1. アナログ時計がフェードアウト（0.4秒）
+      clockContainer.style.opacity = '0';
+
+      setTimeout(() => {
+        // 2. 画面全体が白くなり、デジタル時計（黒文字）が浮かび上がる
+        bodyEl.classList.add('flash-active');
+        digitalClock.style.opacity = '1';
+
+        // 3. 白画面＆デジタル表示を3秒間キープ
+        setTimeout(() => {
+          // 4. 背景色が黒に戻り始めるのに合わせ、デジタル文字を白に変化させて視認性を維持
+          digitalClock.classList.add('dark-text-mode');
+          bodyEl.classList.remove('flash-active');
+
+          // 5. さらに3秒間、黒背景の中にデジタル時計（白文字）を余韻として残す
+          setTimeout(() => {
+            // 6. デジタル時計が消え、アナログ時計が静かにフェードインして戻る
+            digitalClock.style.opacity = '0';
+            clockContainer.style.opacity = '1';
+
+            // アニメーション完了後に状態をリセット
+            setTimeout(() => {
+              digitalClock.classList.remove('dark-text-mode');
+              isAnimationRunning = false;
+              updateClock(); // 戻った瞬間の最新の針の位置を再計算
+            }, 400);
+
+          }, 3000);
+        }, 3000);
+      }, 400);
+    }
+
+    // 最初の一回を実行し、その後は1秒ごとに時間をチェック（演出検知のため1秒毎に変更）
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // 画面常時点灯（Wake Lock API）
     let wakeLock = null;
     async function requestWakeLock() {
       try {
@@ -167,57 +225,26 @@
       if (document.visibilityState === 'visible') requestWakeLock();
     });
 
-    // ==========================================
-    // 2. オフライン動作のためのキャッシュ制御（PWA）
-    // ==========================================
-    const CACHE_NAME = 'clock-v1';
-    const ASSETS = [
-      './',
-      './index.html',
-      './IMG_1531.WEBP'
-    ];
+    // PWA用のインライン・サービスワーカー（オフライン対応）
+    const CACHE_NAME = 'clock-v2';
+    const ASSETS = ['./', './index.html', './IMG_1531.WEBP'];
 
     if ('serviceWorker' in navigator) {
-      // サービスワーカーの処理をインライン化して動的に登録
       const swCode = `
         const CACHE_NAME = '${CACHE_NAME}';
         const ASSETS = ${JSON.stringify(ASSETS)};
-
         self.addEventListener('install', (e) => {
-          e.waitUntil(
-            caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-          );
+          e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
           self.skipWaiting();
         });
-
         self.addEventListener('activate', (e) => {
-          e.waitUntil(
-            caches.keys().then((keys) => {
-              return Promise.all(
-                keys.map((key) => {
-                  if (key !== CACHE_NAME) return caches.delete(key);
-                })
-              );
-            })
-          );
+          e.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); }))));
           self.clients.claim();
         });
-
-        self.addEventListener('fetch', (e) => {
-          e.respondWith(
-            caches.match(e.request).then((response) => {
-              return response || fetch(e.request);
-            })
-          );
-        });
+        self.addEventListener('fetch', (e) => { e.respondWith(caches.match(e.request).then((res) => res || fetch(e.request))); });
       `;
-
       const blob = new Blob([swCode], { type: 'application/javascript' });
-      const swUrl = URL.createObjectURL(blob);
-
-      navigator.serviceWorker.register(swUrl, { scope: './' })
-        .then(() => console.log('Offline cache ready.'))
-        .catch((err) => console.error('Worker registration failed:', err));
+      navigator.serviceWorker.register(URL.createObjectURL(blob), { scope: './' });
     }
   </script>
 </body>
