@@ -28,8 +28,8 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      /* 背景の変化を1.2秒かけて極めて滑らかに */
-      transition: background-color 1.2s cubic-bezier(0.25, 1, 0.5, 1); 
+      /* 背景色の変化を1.5秒かけて極めて滑らかに */
+      transition: background-color 1.5s cubic-bezier(0.25, 1, 0.5, 1); 
     }
 
     /* ホワイトアウト時のスタイル */
@@ -37,12 +37,12 @@
       background-color: #ffffff !important;
     }
 
-    /* アナログ時計コンテナ（1.2秒のスムーズフェード） */
+    /* アナログ時計コンテナ（1.5秒のスムーズフェード） */
     #clock-container {
       width: 90vmin;
       height: 90vmin;
       position: absolute;
-      transition: transform 0.5s ease, opacity 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+      transition: transform 0.5s ease, opacity 1.5s cubic-bezier(0.25, 1, 0.5, 1);
       will-change: transform, opacity;
       opacity: 1;
     }
@@ -88,22 +88,20 @@
       border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
     }
 
-    /* デジタル時計（1.2秒のスムーズフェード） */
+    /* デジタル時計（1.5秒のスムーズフェード） */
     #digital-clock {
       position: absolute;
       font-size: 24vw;
       font-weight: 300;
       color: #000000;
       opacity: 0;
-      transition: opacity 1.2s cubic-bezier(0.25, 1, 0.5, 1), color 1.2s cubic-bezier(0.25, 1, 0.5, 1);
-      will-change: opacity, color;
+      transition: opacity 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+      will-change: opacity;
       pointer-events: none;
     }
     @media (orientation: landscape) {
       #digital-clock { font-size: 22vh; }
     }
-    /* 背景が黒に戻る瞬間に白文字へ変化 */
-    #digital-clock.dark-text-mode { color: #ffffff; }
   </style>
 </head>
 <body>
@@ -128,7 +126,7 @@
     const clockFace = document.getElementById('clock-face');
     const digitalClock = document.getElementById('digital-clock');
 
-    // 目盛り生成
+    // 文字盤の目盛り（12個）を生成
     for (let i = 0; i < 12; i++) {
       const tick = document.createElement('div');
       tick.classList.add('tick');
@@ -140,6 +138,7 @@
     let isAnimationRunning = false;
 
     function updateClock() {
+      // 常に日本時間（Asia/Tokyo）を取得
       const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
       const formatter = new Intl.DateTimeFormat('ja-JP', options);
       const parts = formatter.formatToParts(new Date());
@@ -148,56 +147,57 @@
       const minutes = parseInt(parts.find(p => p.type === 'minute').value, 10);
       const seconds = parseInt(parts.find(p => p.type === 'second').value, 10);
 
+      // 通常時のアナログ針の駆動
       if (!isAnimationRunning) {
         const minuteDeg = minutes * 6;
         const hourDeg = (hours % 12) * 30 + minutes * 0.5;
         hourHand.style.transform = `rotate(${hourDeg}deg)`;
         minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
-        // ピクセルシフト
+        // ピクセルシフト（焼き付き防止：1分毎に最大3pxランダム移動）
         const randomX = Math.floor(Math.random() * 7) - 3;
         const randomY = Math.floor(Math.random() * 7) - 3;
         clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
       }
 
-      // 毎時0分00秒判定
+      // 【修正済】毎時0分00秒の演出トリガー判定
       if (minutes === 0 && seconds === 0 && !isAnimationRunning) {
         triggerHourlyAnimation(hours);
       }
     }
 
-    // ゆっくり溶け込むようなグラデーション演出
+    // 正確に動作するクロスフェード演出アニメーション
     function triggerHourlyAnimation(currentHour) {
       isAnimationRunning = true;
 
+      // デジタル時計のテキストを事前に更新
       const displayHour = String(currentHour).padStart(2, '0');
       digitalClock.textContent = `${displayHour}:00`;
 
-      // 1. アナログが1.2秒かけてゆったり消え始める
+      // STEP 1: アナログ時計を滑らかにフェードアウトしつつ、背景を白くし、デジタルを表示
+      // 全て同じ1.5秒のトランジションでシンクロさせます
       clockContainer.style.opacity = '0';
+      bodyEl.classList.add('flash-active');
+      digitalClock.style.opacity = '1';
 
+      // STEP 2: ホワイトアウト＆デジタル表示の状態を【4秒間】キープ
       setTimeout(() => {
-        // 2. 画面がゆっくり白くなり、黒デジタルの文字が静かに浮かび上がる
-        bodyEl.classList.add('flash-active');
-        digitalClock.style.opacity = '1';
+        
+        // STEP 3: 【完全クロスフェード】背景を黒に戻しつつ、デジタルを消し、アナログを同時にフェードイン
+        bodyEl.classList.remove('flash-active');
+        digitalClock.style.opacity = '0';
+        clockContainer.style.opacity = '1';
 
-        // 3. 白画面を4秒間ゆったり維持
+        // STEP 4: 1.5秒のアニメーションが完全に終了したら、システムを通常駆動に戻す
         setTimeout(() => {
-          // 4. 【改善】黒に戻りながら、デジタルが消え、アナログが同時に戻る美しいクロスフェード
-          bodyEl.classList.remove('flash-active');         // 背景を黒へ（1.2秒かけて）
-          digitalClock.style.opacity = '0';                 // デジタルを消す（1.2秒かけて）
-          clockContainer.style.opacity = '1';              // アナログを戻す（1.2秒かけて）
+          isAnimationRunning = false;
+          updateClock(); // 演出終了時点の正確な時間で針の位置を同期
+        }, 1500);
 
-          // すべての変化（1.2秒）が完全に終わったらフラグをリセット
-          setTimeout(() => {
-            isAnimationRunning = false;
-            updateClock();
-          }, 1200);
-
-        }, 4000);
-      }, 600);
+      }, 4000);
     }
 
+    // 1秒ごとに時間を正確に監視
     updateClock();
     setInterval(updateClock, 1000);
 
@@ -213,10 +213,8 @@
       if (document.visibilityState === 'visible') requestWakeLock();
     });
 
-    // ==========================================
-    // 💡 キャッシュの自動更新（Stale-While-Revalidate型）
-    // ==========================================
-    const CACHE_NAME = 'clock-v3-dynamic';
+    // PWA用のインライン・サービスワーカー（オフライン対応 ＆ キャッシュ自動更新）
+    const CACHE_NAME = 'clock-v4-fixed';
     const ASSETS = ['./', './index.html', './IMG_1531.WEBP'];
 
     if ('serviceWorker' in navigator) {
@@ -225,46 +223,34 @@
         const ASSETS = ${JSON.stringify(ASSETS)};
 
         self.addEventListener('install', (e) => {
-          e.waitUntil(
-            caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-          );
+          e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
           self.skipWaiting();
         });
 
         self.addEventListener('activate', (e) => {
-          e.waitUntil(
-            caches.keys().then((keys) => Promise.all(
-              keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); })
-            ))
-          );
+          e.waitUntil(caches.keys().then((keys) => Promise.all(
+            keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); })
+          )));
           self.clients.claim();
         });
 
-        // 【自動更新機能】アプリ起動のたびにネットワークに問い合わせ、最新があれば裏でキャッシュを入れ替える
         self.addEventListener('fetch', (e) => {
           e.respondWith(
             caches.match(e.request).then((cachedResponse) => {
-              // 1. まずはキャッシュから高速に画面を表示（オフラインでも即座に開く）
               const fetchPromise = fetch(e.request).then((networkResponse) => {
-                // 2. 同時に裏でネットワークから最新版を取得し、キャッシュを常に最新に更新する
                 if (networkResponse && networkResponse.status === 200) {
                   const cacheCopy = networkResponse.clone();
                   caches.open(CACHE_NAME).then((cache) => cache.put(e.request, cacheCopy));
                 }
                 return networkResponse;
-              }).catch(() => null); // オフライン時はエラーを無視
-
+              }).catch(() => null);
               return cachedResponse || fetchPromise;
             })
           );
         });
       `;
       const blob = new Blob([swCode], { type: 'application/javascript' });
-      navigator.serviceWorker.register(URL.createObjectURL(blob), { scope: './' })
-        .then((reg) => {
-          // アプリ起動時に、サービスワーカー自体の更新チェックを強制的に走らせる
-          reg.update();
-        });
+      navigator.serviceWorker.register(URL.createObjectURL(blob), { scope: './' }).then((reg) => { reg.update(); });
     }
   </script>
 </body>
