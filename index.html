@@ -3,12 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- iOS用のフルスクリーン設定と名前設定 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ECO ANALOG CLOCK</title>
+  <meta name="apple-mobile-web-app-title" content="CLOCK">
+  <title>CLOCK</title>
   
-  <!-- PWAマニフェスト -->
-  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22ECO%20ANALOG%22%2C%22short_name%22%3A%22ECOANALOG%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%7D">
+  <!-- 
+    PWAマニフェスト設定：
+    ホーム画面での名前を「CLOCK」にし、アプリアイコン（黒地にアナログ時計デザイン）をBase64データで直接埋め込んでいます。
+  -->
+  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22CLOCK%22%2C%22short_name%22%3A%22CLOCK%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI%2BPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIGZpbGw9IiMwMDAwMDAiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjIyMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzMzMzMzIiBzdHJva2Utd2lkdGg9IjgiLz48bGluZSB4MT0iMjU2IiB5MT0iMjU2IiB4Mj0iMjU2IiB5Mj0iMTMwIiBzdHJva2U9IiNlMGUwZTAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxsaW5lIHgxPSIyNTYiIHkxPSIyNTYiIHgyPSIzNjAiIHkyPSIyNTYiIHN0cm9rZT0iI2FhYWFhYSIgc3Ryb2tlLXdpZHRoPSIyMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8%2BPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU2IiByPSIxNiIgZmlsbD0iI2UwZTBlMCIvPjwvc3ZnPg%3D%3D%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2D%7D%5D%7D">
+
+  <!-- iOS（Safari）用のアイコン指定 -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+PHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIGZpbGw9IiMwMDAwMDAiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjIyMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzMzMzMzIiBzdHJva2Utd2lkdGg9IjgiLz48bGluZSB4MT0iMjU2IiB5MT0iMjU2IiB4Mj0iMjU2IiB5Mj0iMTMwIiBzdHJva2U9IiNlMGUwZTAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxsaW5lIHgxPSIyNTYiIHkxPSIyNTYiIHgyPSIzNjAiIHkyPSIyNTYiIHN0cm9rZT0iI2FhYWFhYSIgc3Ryb2tlLXdpZHRoPSIyMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU2IiByPSIxNiIgZmlsbD0iI2UwZTBlMCIvPjwvc3ZnPg==">
 
   <style>
     * {
@@ -37,7 +45,7 @@
       will-change: transform;
     }
 
-    /* 時計の文字盤（極薄のグレーで発光を最小限に） */
+    /* 時計の文字盤 */
     .clock-face {
       width: 100%;
       height: 100%;
@@ -46,7 +54,7 @@
       position: relative;
     }
 
-    /* 目盛り（12個） */
+    /* 目盛り */
     .tick {
       position: absolute;
       width: 2px;
@@ -56,25 +64,23 @@
       left: 50%;
       transform-origin: 50% calc(45vmin - 10px);
     }
-    /* 12, 3, 6, 9時だけ少し目立たせる */
     .tick.major {
       width: 4px;
       height: 20px;
       background-color: #888888;
     }
 
-    /* 針の共通スタイル（根元を中心に回転） */
+    /* 針のスタイル */
     .hand {
       position: absolute;
       bottom: 50%;
       left: 50%;
       transform-origin: bottom center;
       border-radius: 4px;
-      /* 1分ごとの動きを滑らかにするアニメーション */
       transition: transform 0.6s cubic-bezier(0.4, 2.08, 0.55, 1);
     }
 
-    /* 時針（短針）：太く、短く、少し暗めのグレー */
+    /* 時針（短針） */
     .hour-hand {
       width: 8px;
       height: 25%;
@@ -82,7 +88,7 @@
       margin-left: -4px;
     }
 
-    /* 分針（長針）：細く、長く、明るいホワイト */
+    /* 分針（長針） */
     .minute-hand {
       width: 4px;
       height: 40%;
@@ -107,7 +113,6 @@
 
   <div id="clock-container">
     <div class="clock-face" id="clock-face">
-      <!-- JavaScriptで目盛りを自動生成します -->
       <div class="hand hour-hand" id="hour-hand"></div>
       <div class="hand minute-hand" id="minute-hand"></div>
       <div class="center-dot"></div>
@@ -124,13 +129,13 @@
     for (let i = 0; i < 12; i++) {
       const tick = document.createElement('div');
       tick.classList.add('tick');
-      if (i % 3 === 0) tick.classList.add('major'); // 12, 3, 6, 9時
+      if (i % 3 === 0) tick.classList.add('major');
       tick.style.transform = `translateX(-50%) rotate(${i * 30}deg)`;
       clockFace.appendChild(tick);
     }
 
     function updateClock() {
-      // 常に日本時間（Asia/Tokyo）を取得
+      // 日本時間固定
       const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', hour12: false };
       const formatter = new Intl.DateTimeFormat('ja-JP', options);
       const parts = formatter.formatToParts(new Date());
@@ -138,21 +143,18 @@
       const hours = parseInt(parts.find(p => p.type === 'hour').value, 10);
       const minutes = parseInt(parts.find(p => p.type === 'minute').value, 10);
 
-      // 針の角度を計算
-      const minuteDeg = minutes * 6; // 1分＝6度
-      const hourDeg = (hours % 12) * 30 + minutes * 0.5; // 1時間＝30度 ＋ 分による微移動
+      const minuteDeg = minutes * 6;
+      const hourDeg = (hours % 12) * 30 + minutes * 0.5;
 
-      // 針を回転
       hourHand.style.transform = `rotate(${hourDeg}deg)`;
       minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
-      // 焼き付き防止（ピクセルシフト）: 1分ごとに時計全体を数ピクセルだけランダムにずらす
+      // 焼き付き防止（ピクセルシフト）
       const randomX = Math.floor(Math.random() * 7) - 3;
       const randomY = Math.floor(Math.random() * 7) - 3;
       clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
     }
 
-    // 最初の一回を実行し、その後は10秒ごとに時間をチェック（負荷軽減のため）
     updateClock();
     setInterval(updateClock, 10000);
 
