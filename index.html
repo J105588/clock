@@ -148,6 +148,33 @@
         font-size: 22vh;
       }
     }
+
+    /* 日付表示 */
+    #date-display {
+      position: absolute;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      right: max(24px, env(safe-area-inset-right));
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      color: #666666;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #date-display.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    body.flash-active #date-display {
+      opacity: 0 !important;
+      transform: translateY(8px) !important;
+    }
   </style>
 </head>
 
@@ -162,6 +189,7 @@
   </div>
 
   <div id="digital-clock">00:00</div>
+  <div id="date-display"></div>
 
   <script>
     // ==========================================
@@ -204,6 +232,31 @@
       };
     }
 
+    function updateDate() {
+      const jstDate = new Date();
+      
+      // JSTでの年月日を取得
+      const dateParts = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(jstDate);
+      
+      const year = dateParts.find(p => p.type === 'year').value;
+      const month = dateParts.find(p => p.type === 'month').value;
+      const day = dateParts.find(p => p.type === 'day').value;
+
+      // JSTでの曜日（英語大文字表記）を取得
+      const weekday = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Tokyo',
+        weekday: 'short'
+      }).format(jstDate).toUpperCase();
+
+      const dateDisplay = document.getElementById('date-display');
+      dateDisplay.textContent = `${year}.${month}.${day} ${weekday}`;
+    }
+
     function updateClock() {
       const { hours, minutes, seconds } = getJSTParts();
 
@@ -212,13 +265,15 @@
         const hourDeg = (hours % 12) * 30 + minutes * 0.5;
         hourHand.style.transform = `rotate(${hourDeg}deg)`;
         minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
-
       }
 
       // 毎時0分00秒の自動発動
       if (minutes === 0 && seconds === 0 && !isAnimationRunning) {
         playAnimation(hours, minutes);
       }
+
+      // 日付表示の更新
+      updateDate();
     }
 
     // クロスフェード演出の本体
@@ -274,7 +329,6 @@
       // タップで画面常時点灯をリクエスト
       requestWakeLock();
 
-      // 5回タップのカウント処理
       tapCount++;
       clearTimeout(tapTimeout);
 
@@ -283,10 +337,15 @@
         const { hours, minutes } = getJSTParts(); // その瞬間の時間を取得
         playAnimation(hours, minutes); // 演出トリガー
       } else {
-        // 1秒間タップされなかったらカウントをリセット
+        // タップが途切れたらタップ回数に応じた処理を実行
         tapTimeout = setTimeout(() => {
-          tapCount = 0;
-        }, 1000);
+          if (tapCount === 2) {
+            // ダブルタップ（2回タップ）で日付表示をトグル
+            const dateDisplay = document.getElementById('date-display');
+            dateDisplay.classList.toggle('visible');
+          }
+          tapCount = 0; // リセット
+        }, 280); // ダブルタップ検知の猶予時間（280ms）
       }
     });
 
