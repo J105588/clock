@@ -3,19 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <!-- iOS用のフルスクリーン設定と名前設定 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="CLOCK">
   <title>CLOCK</title>
   
-  <!-- 
-    PWAマニフェスト設定：
-    ホーム画面での名前を「CLOCK」にし、アプリアイコンに「IMG_1531.WEBP」を指定しています。
-  -->
+  <!-- PWAマニフェスト（アイコンに IMG_1531.WEBP を指定） -->
   <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22CLOCK%22%2C%22short_name%22%3A%22CLOCK%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22IMG_1531.WEBP%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fwebp%22%7D%5D%7D">
 
-  <!-- iOS（Safari）用のアイコン指定 -->
+  <!-- iOS用アイコン -->
   <link rel="apple-touch-icon" href="IMG_1531.WEBP">
 
   <style>
@@ -36,7 +32,7 @@
       align-items: center;
     }
 
-    /* 時計全体のコンテナ（焼き付き防止の微細な移動用） */
+    /* 焼き付き防止コンテナ */
     #clock-container {
       width: 90vmin;
       height: 90vmin;
@@ -45,7 +41,7 @@
       will-change: transform;
     }
 
-    /* 時計の文字盤 */
+    /* 文字盤 */
     .clock-face {
       width: 100%;
       height: 100%;
@@ -70,7 +66,7 @@
       background-color: #888888;
     }
 
-    /* 針のスタイル */
+    /* 針の共通スタイル */
     .hand {
       position: absolute;
       bottom: 50%;
@@ -80,7 +76,7 @@
       transition: transform 0.6s cubic-bezier(0.4, 2.08, 0.55, 1);
     }
 
-    /* 時針（短針） */
+    /* 時針 */
     .hour-hand {
       width: 8px;
       height: 25%;
@@ -88,7 +84,7 @@
       margin-left: -4px;
     }
 
-    /* 分針（長針） */
+    /* 分針 */
     .minute-hand {
       width: 4px;
       height: 40%;
@@ -96,7 +92,7 @@
       margin-left: -2px;
     }
 
-    /* 中央のピン */
+    /* センターピン */
     .center-dot {
       position: absolute;
       width: 12px;
@@ -120,12 +116,14 @@
   </div>
 
   <script>
+    // ==========================================
+    // 1. 時計のロジック（日本時間・省エネ）
+    // ==========================================
     const clockContainer = document.getElementById('clock-container');
     const hourHand = document.getElementById('hour-hand');
     const minuteHand = document.getElementById('minute-hand');
     const clockFace = document.getElementById('clock-face');
 
-    // 文字盤の目盛り（12個）を生成
     for (let i = 0; i < 12; i++) {
       const tick = document.createElement('div');
       tick.classList.add('tick');
@@ -135,7 +133,6 @@
     }
 
     function updateClock() {
-      // 日本時間固定
       const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', hour12: false };
       const formatter = new Intl.DateTimeFormat('ja-JP', options);
       const parts = formatter.formatToParts(new Date());
@@ -149,30 +146,79 @@
       hourHand.style.transform = `rotate(${hourDeg}deg)`;
       minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
-      // 焼き付き防止（ピクセルシフト）
+      // ピクセルシフト（焼き付き防止）
       const randomX = Math.floor(Math.random() * 7) - 3;
       const randomY = Math.floor(Math.random() * 7) - 3;
       clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
     }
 
     updateClock();
-    setInterval(updateClock, 10000);
+    setInterval(updateClock, 10000); // 10秒に1回チェック（省エネ）
 
-    // 画面常時点灯（Wake Lock API）
+    // 常時点灯リクエスト
     let wakeLock = null;
     async function requestWakeLock() {
       try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-        }
-      } catch (err) {
-        console.log(`${err.name}, ${err.message}`);
-      }
+        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {}
     }
     document.addEventListener('click', requestWakeLock);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') requestWakeLock();
     });
+
+    // ==========================================
+    // 2. オフライン動作のためのキャッシュ制御（PWA）
+    // ==========================================
+    const CACHE_NAME = 'clock-v1';
+    const ASSETS = [
+      './',
+      './index.html',
+      './IMG_1531.WEBP'
+    ];
+
+    if ('serviceWorker' in navigator) {
+      // サービスワーカーの処理をインライン化して動的に登録
+      const swCode = `
+        const CACHE_NAME = '${CACHE_NAME}';
+        const ASSETS = ${JSON.stringify(ASSETS)};
+
+        self.addEventListener('install', (e) => {
+          e.waitUntil(
+            caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+          );
+          self.skipWaiting();
+        });
+
+        self.addEventListener('activate', (e) => {
+          e.waitUntil(
+            caches.keys().then((keys) => {
+              return Promise.all(
+                keys.map((key) => {
+                  if (key !== CACHE_NAME) return caches.delete(key);
+                })
+              );
+            })
+          );
+          self.clients.claim();
+        });
+
+        self.addEventListener('fetch', (e) => {
+          e.respondWith(
+            caches.match(e.request).then((response) => {
+              return response || fetch(e.request);
+            })
+          );
+        });
+      `;
+
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+
+      navigator.serviceWorker.register(swUrl, { scope: './' })
+        .then(() => console.log('Offline cache ready.'))
+        .catch((err) => console.error('Worker registration failed:', err));
+    }
   </script>
 </body>
 </html>
