@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ECO ANALOG CLOCK</title>
+  
+  <!-- PWAマニフェスト -->
+  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22ECO%20ANALOG%22%2C%22short_name%22%3A%22ECOANALOG%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%7D">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* 時計全体のコンテナ（焼き付き防止の微細な移動用） */
+    #clock-container {
+      width: 90vmin;
+      height: 90vmin;
+      position: relative;
+      transition: transform 0.5s ease;
+      will-change: transform;
+    }
+
+    /* 時計の文字盤（極薄のグレーで発光を最小限に） */
+    .clock-face {
+      width: 100%;
+      height: 100%;
+      border: 2px solid #333333;
+      border-radius: 50%;
+      position: relative;
+    }
+
+    /* 目盛り（12個） */
+    .tick {
+      position: absolute;
+      width: 2px;
+      height: 15px;
+      background-color: #444444;
+      top: 10px;
+      left: 50%;
+      transform-origin: 50% calc(45vmin - 10px);
+    }
+    /* 12, 3, 6, 9時だけ少し目立たせる */
+    .tick.major {
+      width: 4px;
+      height: 20px;
+      background-color: #888888;
+    }
+
+    /* 針の共通スタイル（根元を中心に回転） */
+    .hand {
+      position: absolute;
+      bottom: 50%;
+      left: 50%;
+      transform-origin: bottom center;
+      border-radius: 4px;
+      /* 1分ごとの動きを滑らかにするアニメーション */
+      transition: transform 0.6s cubic-bezier(0.4, 2.08, 0.55, 1);
+    }
+
+    /* 時針（短針）：太く、短く、少し暗めのグレー */
+    .hour-hand {
+      width: 8px;
+      height: 25%;
+      background-color: #aaaaaa;
+      margin-left: -4px;
+    }
+
+    /* 分針（長針）：細く、長く、明るいホワイト */
+    .minute-hand {
+      width: 4px;
+      height: 40%;
+      background-color: #e0e0e0;
+      margin-left: -2px;
+    }
+
+    /* 中央のピン */
+    .center-dot {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background-color: #e0e0e0;
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="clock-container">
+    <div class="clock-face" id="clock-face">
+      <!-- JavaScriptで目盛りを自動生成します -->
+      <div class="hand hour-hand" id="hour-hand"></div>
+      <div class="hand minute-hand" id="minute-hand"></div>
+      <div class="center-dot"></div>
+    </div>
+  </div>
+
+  <script>
+    const clockContainer = document.getElementById('clock-container');
+    const hourHand = document.getElementById('hour-hand');
+    const minuteHand = document.getElementById('minute-hand');
+    const clockFace = document.getElementById('clock-face');
+
+    // 文字盤の目盛り（12個）を生成
+    for (let i = 0; i < 12; i++) {
+      const tick = document.createElement('div');
+      tick.classList.add('tick');
+      if (i % 3 === 0) tick.classList.add('major'); // 12, 3, 6, 9時
+      tick.style.transform = `translateX(-50%) rotate(${i * 30}deg)`;
+      clockFace.appendChild(tick);
+    }
+
+    function updateClock() {
+      // 常に日本時間（Asia/Tokyo）を取得
+      const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', hour12: false };
+      const formatter = new Intl.DateTimeFormat('ja-JP', options);
+      const parts = formatter.formatToParts(new Date());
+
+      const hours = parseInt(parts.find(p => p.type === 'hour').value, 10);
+      const minutes = parseInt(parts.find(p => p.type === 'minute').value, 10);
+
+      // 針の角度を計算
+      const minuteDeg = minutes * 6; // 1分＝6度
+      const hourDeg = (hours % 12) * 30 + minutes * 0.5; // 1時間＝30度 ＋ 分による微移動
+
+      // 針を回転
+      hourHand.style.transform = `rotate(${hourDeg}deg)`;
+      minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
+
+      // 焼き付き防止（ピクセルシフト）: 1分ごとに時計全体を数ピクセルだけランダムにずらす
+      const randomX = Math.floor(Math.random() * 7) - 3;
+      const randomY = Math.floor(Math.random() * 7) - 3;
+      clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
+    }
+
+    // 最初の一回を実行し、その後は10秒ごとに時間をチェック（負荷軽減のため）
+    updateClock();
+    setInterval(updateClock, 10000);
+
+    // 画面常時点灯（Wake Lock API）
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.log(`${err.name}, ${err.message}`);
+      }
+    }
+    document.addEventListener('click', requestWakeLock);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    });
+  </script>
+</body>
+</html>
