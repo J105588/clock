@@ -28,15 +28,15 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      transition: background-color 0.4s ease; /* 画面全体が白くなる演出用 */
+      transition: background-color 0.4s ease;
     }
 
-    /* 毎時0分のホワイトアウト演出用のクラス */
+    /* ホワイトアウト演出用のクラス */
     body.flash-active {
       background-color: #ffffff !important;
     }
 
-    /* アナログ時計のコンテナ（ピクセルシフト・フェードアウト用） */
+    /* アナログ時計のコンテナ */
     #clock-container {
       width: 90vmin;
       height: 90vmin;
@@ -89,12 +89,12 @@
       border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
     }
 
-    /* 演出時のみ裏で浮かび上がるデジタル時計（初期状態は完全に透明） */
+    /* デジタル時計（通常時は非表示） */
     #digital-clock {
       position: absolute;
       font-size: 24vw;
       font-weight: 300;
-      color: #000000; /* 白画面の時は黒文字 */
+      color: #000000;
       opacity: 0;
       transition: opacity 0.4s ease, color 0.4s ease;
       will-change: opacity, color;
@@ -104,7 +104,7 @@
       #digital-clock { font-size: 22vh; }
     }
 
-    /* 白画面が終わり、背景が黒に戻っていくときのデジタル文字の色（白文字化） */
+    /* 背景が黒に戻っていくときのデジタル文字の色（白文字化） */
     #digital-clock.dark-text-mode { color: #ffffff; }
   </style>
 </head>
@@ -119,7 +119,7 @@
     </div>
   </div>
 
-  <!-- デジタル時計（通常時は非表示） -->
+  <!-- デジタル時計 -->
   <div id="digital-clock">00:00</div>
 
   <script>
@@ -141,20 +141,26 @@
 
     let isAnimationRunning = false;
 
-    function updateClock() {
-      // 日本時間（JST）の取得
+    // 時刻データを取得する共通関数
+    function getJSTTime() {
       const options = { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
       const formatter = new Intl.DateTimeFormat('ja-JP', options);
       const parts = formatter.formatToParts(new Date());
 
-      const hours = parseInt(parts.find(p => p.type === 'hour').value, 10);
-      const minutes = parseInt(parts.find(p => p.type === 'minute').value, 10);
-      const seconds = parseInt(parts.find(p => p.type === 'second').value, 10);
+      return {
+        hours: parseInt(parts.find(p => p.type === 'hour').value, 10),
+        minutes: parseInt(parts.find(p => p.type === 'minute').value, 10),
+        seconds: parseInt(parts.find(p => p.type === 'second').value, 10)
+      };
+    }
+
+    function updateClock() {
+      const time = getJSTTime();
 
       // 通常時のアナログ針の更新（演出実行中でない場合のみ）
       if (!isAnimationRunning) {
-        const minuteDeg = minutes * 6;
-        const hourDeg = (hours % 12) * 30 + minutes * 0.5;
+        const minuteDeg = time.minutes * 6;
+        const hourDeg = (time.hours % 12) * 30 + time.minutes * 0.5;
         hourHand.style.transform = `rotate(${hourDeg}deg)`;
         minuteHand.style.transform = `rotate(${minuteDeg}deg)`;
 
@@ -164,18 +170,20 @@
         clockContainer.style.transform = `translate(${randomX}px, ${randomY}px)`;
       }
 
-      // 【毎時0分00秒の演出ロジック】
-      if (minutes === 0 && seconds === 0 && !isAnimationRunning) {
-        triggerHourlyAnimation(hours);
+      // 毎時0分00秒の自動自動発動
+      if (time.minutes === 0 && time.seconds === 0 && !isAnimationRunning) {
+        triggerHourlyAnimation(time.hours, time.minutes);
       }
     }
 
-    function triggerHourlyAnimation(currentHour) {
+    // 演出アニメーション関数
+    function triggerHourlyAnimation(currentHour, currentMinute) {
       isAnimationRunning = true;
 
-      // デジタル時計のテキストをセット（例: "12:00"）
+      // デジタル時計のテキストを動的に生成
       const displayHour = String(currentHour).padStart(2, '0');
-      digitalClock.textContent = `${displayHour}:00`;
+      const displayMinute = String(currentMinute).padStart(2, '0');
+      digitalClock.textContent = `${displayHour}:${displayMinute}`;
 
       // 1. アナログ時計がフェードアウト（0.4秒）
       clockContainer.style.opacity = '0';
@@ -201,7 +209,7 @@
             setTimeout(() => {
               digitalClock.classList.remove('dark-text-mode');
               isAnimationRunning = false;
-              updateClock(); // 戻った瞬間の最新の針の位置を再計算
+              updateClock(); // 戻った瞬間の最新の針の位置に更新
             }, 400);
 
           }, 3000);
@@ -209,24 +217,55 @@
       }, 400);
     }
 
-    // 最初の一回を実行し、その後は1秒ごとに時間をチェック（演出検知のため1秒毎に変更）
+    // 1秒ごとに時計を監視
     updateClock();
     setInterval(updateClock, 1000);
 
-    // 画面常時点灯（Wake Lock API）
+    // ==========================================
+    // 連打検知 ＆ 常時点灯リクエスト（5回タップ制御）
+    // ==========================================
+    let tapCount = 0;
+    let tapTimeout = null;
     let wakeLock = null;
-    async function requestWakeLock() {
+
+    async function handleScreenTap() {
+      // 1. 本来のスリープ防止（Wake Lock API）をリクエスト
       try {
         if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
       } catch (err) {}
+
+      // 既にアニメーション再生中なら連打カウンターを進めない
+      if (isAnimationRunning) return;
+
+      // 2. 連続タップのカウント処理
+      tapCount++;
+      
+      // 前回のタイマーをクリア（1秒以内に次のタップが来なければリセット）
+      clearTimeout(tapTimeout);
+      
+      if (tapCount === 5) {
+        // 5回連続タップ成功！その瞬間の時間で演出を強制発動
+        tapCount = 0;
+        const nowTime = getJSTTime();
+        triggerHourlyAnimation(nowTime.hours, nowTime.minutes);
+      } else {
+        // 1秒間タップが途切れたらカウンターをゼロに戻す
+        tapTimeout = setTimeout(() => {
+          tapCount = 0;
+        }, 1000);
+      }
     }
-    document.addEventListener('click', requestWakeLock);
+
+    // タッチおよびクリックイベントの登録
+    document.addEventListener('click', handleScreenTap);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') requestWakeLock();
+      if (document.visibilityState === 'visible' && 'wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(()=>{});
+      }
     });
 
     // PWA用のインライン・サービスワーカー（オフライン対応）
-    const CACHE_NAME = 'clock-v2';
+    const CACHE_NAME = 'clock-v3';
     const ASSETS = ['./', './index.html', './IMG_1531.WEBP'];
 
     if ('serviceWorker' in navigator) {
